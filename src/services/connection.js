@@ -2,17 +2,24 @@ import { API_CONFIG } from '../config/api';
 
 const listeners = new Set();
 
+// The backend can take 1-2 minutes to wake up (e.g. Render cold start).
+const WAKING_TIMEOUT_MS = 120000;
+const WAKING_POLL_MS = 3000;
+const ONLINE_POLL_MS = 30000;
+const OFFLINE_RETRY_MS = 15000;
+
 let snapshot = {
-  status: 'checking',
+  status: 'waking',
   lastCheckedAt: 0,
   lastError: '',
-  retryInMs: 0,
+  retryInMs: WAKING_POLL_MS,
 };
 
 let checkPromise = null;
 let monitorTimer = 0;
-let retryDelay = 5000;
+let deadlineTimer = 0;
 let monitorStarted = false;
+let wakingDeadline = Date.now() + WAKING_TIMEOUT_MS;
 
 function emit(next) {
   snapshot = { ...snapshot, ...next };
@@ -29,26 +36,33 @@ export function subscribeToConnection(listener) {
 }
 
 function isUnavailableStatus(status) {
-  return status === 0 || status === 502 || status === 504;
+  return status === 0 || status === 502 || status === 503 || status === 504;
+}
+
+function isWaking() {
+  return snapshot.status === 'waking' && Date.now() < wakingDeadline;
 }
 
 function markOffline(message) {
   emit({
     status: 'offline',
     lastCheckedAt: Date.now(),
-    lastError: message || 'Server is currently unavailable. Please try again later.',
-    retryInMs: retryDelay,
+    lastError: message || 'Backend not connected.',
+    retryInMs: OFFLINE_RETRY_MS,
   });
 }
 
 export function markRequestSuccess() {
-  retryDelay = 5000;
   if (snapshot.status === 'online' && !snapshot.lastError) return;
   emit({ status: 'online', lastCheckedAt: Date.now(), lastError: '', retryInMs: 0 });
 }
 
 export function markRequestFailure(error) {
   if (!isUnavailableStatus(error?.status)) return;
+  if (isWaking()) {
+    emit({ lastCheckedAt: Date.now(), lastError: error?.message || '' });
+    return;
+  }
   markOffline(error?.message);
 }
 
@@ -74,11 +88,14 @@ export function checkConnection() {
       return true;
     } catch (error) {
       const timedOut = error?.name === 'AbortError';
-      markOffline(
-        timedOut
-          ? 'The server took too long to respond. Please try again.'
-          : 'Server is currently unavailable. Please try again later.',
-      );
+      const message = timedOut
+        ? 'The server took too long to respond. Please try again.'
+        : 'Backend not connected. Please try again later.';
+      if (isWaking()) {
+        emit({ lastCheckedAt: Date.now(), lastError: message });
+      } else {
+        markOffline(message);
+      }
       return false;
     } finally {
       window.clearTimeout(timer);
@@ -92,21 +109,33 @@ export function checkConnection() {
 export function startConnectionMonitor() {
   if (monitorStarted) return () => {};
   monitorStarted = true;
-  checkConnection();
+  let stopped = false;
+
+  if (snapshot.status === 'waking') {
+    const remaining = Math.max(0, wakingDeadline - Date.now());
+    window.clearTimeout(deadlineTimer);
+    deadlineTimer = window.setTimeout(() => {
+      if (snapshot.status === 'waking') markOffline('Backend not connected.');
+    }, remaining);
+  }
 
   const schedule = () => {
+    if (stopped) return;
     window.clearTimeout(monitorTimer);
-    const delay = snapshot.status === 'offline' ? retryDelay : 30000;
+    const delay = snapshot.status === 'waking'
+      ? WAKING_POLL_MS
+      : snapshot.status === 'offline'
+        ? OFFLINE_RETRY_MS
+        : ONLINE_POLL_MS;
     monitorTimer = window.setTimeout(async () => {
       if (document.visibilityState === 'visible') await checkConnection();
-      if (snapshot.status === 'offline') retryDelay = Math.min(retryDelay * 2, 30000);
       schedule();
     }, delay);
   };
-  schedule();
+
+  checkConnection().then(schedule);
 
   const handleOnline = () => {
-    retryDelay = 5000;
     checkConnection();
   };
   const handleOffline = () => {
@@ -114,7 +143,7 @@ export function startConnectionMonitor() {
       status: 'offline',
       lastCheckedAt: Date.now(),
       lastError: 'Your device is offline. Check your network connection.',
-      retryInMs: retryDelay,
+      retryInMs: OFFLINE_RETRY_MS,
     });
   };
   const handleVisibility = () => {
@@ -126,8 +155,10 @@ export function startConnectionMonitor() {
   document.addEventListener('visibilitychange', handleVisibility);
 
   return () => {
+    stopped = true;
     monitorStarted = false;
     window.clearTimeout(monitorTimer);
+    window.clearTimeout(deadlineTimer);
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);
     document.removeEventListener('visibilitychange', handleVisibility);

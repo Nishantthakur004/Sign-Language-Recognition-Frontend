@@ -68,6 +68,28 @@
   }
 }
 
+@keyframes status-dot {
+  0%, 80%, 100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.status-dots {
+  display: inline-flex;
+  align-items: baseline;
+  margin-left: 1px;
+}
+
+.status-dot {
+  display: inline-block;
+  animation: status-dot 1.2s infinite ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;

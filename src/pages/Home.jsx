@@ -4,6 +4,7 @@ import { BookOpen, Cpu, Gauge, Hand, ScanLine, ShieldCheck, Sparkles, Volume2 } 
 import HandLandmarkIllustration from '../assets/HandLandmarkIllustration';
 import { buttonStyles } from '../components/ui/Button';
 import { LoadingState } from '../components/ui/States';
+import useConnectionStatus from '../hooks/useConnectionStatus';
 import { publicApi, dictionaryApi } from '../services/api';
 
 const features = [
@@ -16,10 +17,18 @@ const features = [
 ];
 
 export default function Home() {
+  const connection = useConnectionStatus();
   const [status, setStatus] = useState({ health: null, dictionary: null, loading: true, error: '' });
 
   useEffect(() => {
+    if (connection.status !== 'online') {
+      setStatus({ health: null, dictionary: null, loading: connection.status === 'waking', error: '' });
+      return undefined;
+    }
+
     let mounted = true;
+    setStatus((current) => ({ ...current, loading: true }));
+
     Promise.allSettled([publicApi.health(), dictionaryApi.list({ page_size: 1 })]).then(([health, dictionary]) => {
       if (!mounted) return;
       setStatus({
@@ -30,7 +39,7 @@ export default function Home() {
       });
     });
     return () => { mounted = false; };
-  }, []);
+  }, [connection.status]);
 
   const health = status.health && typeof status.health === 'object' ? status.health : null;
   const serviceReachable = Boolean(health);

@@ -8,13 +8,13 @@ const STATES = {
     dot: 'bg-emerald-500',
     tone: 'bg-emerald-50 text-emerald-700',
   },
-  checking: {
-    label: 'Checking backend…',
-    dot: 'animate-pulse bg-amber-400',
+  waking: {
+    label: 'Waking up the server, Please Wait',
+    dot: 'bg-amber-400',
     tone: 'bg-amber-50 text-amber-800',
   },
   offline: {
-    label: 'Backend offline',
+    label: 'Backend not connected',
     dot: 'bg-red-500',
     tone: 'bg-red-50 text-red-700',
   },
@@ -22,7 +22,8 @@ const STATES = {
 
 export default function ConnectionStatus({ compact = false }) {
   const connection = useConnectionStatus();
-  const state = STATES[connection.status] || STATES.checking;
+  const state = STATES[connection.status] || STATES.waking;
+  const waking = connection.status === 'waking';
 
   return (
     <div
@@ -31,8 +32,20 @@ export default function ConnectionStatus({ compact = false }) {
       role="status"
       aria-live="polite"
     >
-      <span className={`h-2 w-2 rounded-full ${state.dot}`} aria-hidden="true" />
-      <span className={compact ? 'hidden sm:inline' : ''}>{state.label}</span>
+      <span
+        className={`h-2 w-2 shrink-0 rounded-full ${state.dot} ${waking ? 'animate-pulse' : ''}`}
+        aria-hidden="true"
+      />
+      <span className={compact ? 'hidden sm:inline' : ''}>
+        {state.label}
+        {waking && (
+          <span className="status-dots" aria-hidden="true">
+            <span className="status-dot">.</span>
+            <span className="status-dot" style={{ animationDelay: '160ms' }}>.</span>
+            <span className="status-dot" style={{ animationDelay: '320ms' }}>.</span>
+          </span>
+        )}
+      </span>
       {connection.status === 'offline' && (
         <button
           type="button"
