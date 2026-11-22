@@ -29,7 +29,16 @@ export function subscribeToConnection(listener) {
 }
 
 function isUnavailableStatus(status) {
-  return status === 0 || status === 502 || status === 503 || status === 504;
+  return status === 0 || status === 502 || status === 504;
+}
+
+function markOffline(message) {
+  emit({
+    status: 'offline',
+    lastCheckedAt: Date.now(),
+    lastError: message || 'Server is currently unavailable. Please try again later.',
+    retryInMs: retryDelay,
+  });
 }
 
 export function markRequestSuccess() {
@@ -40,12 +49,7 @@ export function markRequestSuccess() {
 
 export function markRequestFailure(error) {
   if (!isUnavailableStatus(error?.status)) return;
-  emit({
-    status: 'offline',
-    lastCheckedAt: Date.now(),
-    lastError: error?.message || 'Server is currently unavailable. Please try again later.',
-    retryInMs: retryDelay,
-  });
+  markOffline(error?.message);
 }
 
 export function checkConnection() {
@@ -70,12 +74,11 @@ export function checkConnection() {
       return true;
     } catch (error) {
       const timedOut = error?.name === 'AbortError';
-      markRequestFailure({
-        status: error?.status ?? 0,
-        message: timedOut
+      markOffline(
+        timedOut
           ? 'The server took too long to respond. Please try again.'
           : 'Server is currently unavailable. Please try again later.',
-      });
+      );
       return false;
     } finally {
       window.clearTimeout(timer);
