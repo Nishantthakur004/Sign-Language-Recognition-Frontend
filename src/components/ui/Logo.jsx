@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-const LOGO_SRC = 'https://i.ibb.co/BHncbQDP/AI-Sign-Recognition-Monitor-Logo.png';
+const LOGO_SRC = 'https://i.ibb.co/yn3jvys4/Hand-Sign.png';
 
 export default function Logo({ light = false, className = '' }) {
   return (

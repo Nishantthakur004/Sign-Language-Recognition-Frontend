@@ -27,7 +27,7 @@ export const API_CONFIG = {
   wsUrl: `${API_ORIGIN.replace(/^http/, 'ws')}/ws/recognition`,
   timeoutMs: Number(import.meta.env.VITE_API_TIMEOUT_MS) || 20000,
   uploadTimeoutMs: Number(import.meta.env.VITE_API_UPLOAD_TIMEOUT_MS) || 180000,
-  healthTimeoutMs: 5000,
+  healthTimeoutMs: 20000,
   retryAttempts: 2,
   retryDelayMs: 600,
   isConfigured: Boolean(rawBaseUrl),
