@@ -7,6 +7,7 @@ import PageHeader from '../components/ui/PageHeader';
 import Button from '../components/ui/Button';
 import { Notice } from '../components/ui/States';
 import useCamera from '../hooks/useCamera';
+import useConnectionStatus from '../hooks/useConnectionStatus';
 import { getWebSocketUrl, recognitionApi } from '../services/api';
 import { normalizePrediction } from '../services/prediction';
 import { GestureStabilizer } from '../services/stabilization';
@@ -24,11 +25,14 @@ const MAX_RECENT = 8;
 
 export default function LiveRecognition() {
   const { videoRef, running, starting, error: cameraError, start, stop } = useCamera();
+  const connection = useConnectionStatus();
+  const backendOffline = connection.status === 'offline';
   const overlayRef = useRef(null);
   const socketRef = useRef(null);
   const landmarkerRef = useRef(null);
   const rafRef = useRef(0);
   const sequenceTimerRef = useRef(0);
+  const reconnectTimerRef = useRef(0);
   const inFlightRef = useRef(false);
   const inFlightTimeoutRef = useRef(0);
   const lastDetectRef = useRef(0);
@@ -88,6 +92,7 @@ export default function LiveRecognition() {
 
   const closeSocket = useCallback(() => {
     window.clearTimeout(inFlightTimeoutRef.current);
+    window.clearTimeout(reconnectTimerRef.current);
     inFlightRef.current = false;
     const socket = socketRef.current;
     socketRef.current = null;
@@ -212,13 +217,26 @@ export default function LiveRecognition() {
     };
     socket.onerror = () => {
       setSocketStatus('error');
-      setModelError('The live recognition connection failed. Check that the backend is running.');
+      setModelError('Server is currently unavailable. Please try again later.');
+      socket.close();
     };
     socket.onclose = () => {
       setSocketStatus('closed');
       inFlightRef.current = false;
+      if (runningRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = window.setTimeout(() => {
+          if (runningRef.current) connectSocket();
+        }, 3000);
+      }
     };
   }, [closeSocket, handlePrediction]);
+
+  useEffect(() => {
+    if (connection.status === 'online' && runningRef.current && socketRef.current?.readyState !== WebSocket.OPEN) {
+      connectSocket();
+    }
+  }, [connection.status, connectSocket]);
 
   async function startSession() {
     setNotice('');
@@ -316,13 +334,15 @@ export default function LiveRecognition() {
 
   const confidence = prediction ? Math.round((prediction.confidence || 0) * 100) : 0;
   const belowThreshold = prediction && prediction.confidence < threshold;
-  const statusLabel = recognitionPaused
-    ? 'Recognition paused'
-    : socketStatus === 'open'
-      ? 'Live'
-      : socketStatus === 'connecting'
-        ? 'Connecting…'
-        : running ? 'Camera on' : 'Camera off';
+  const statusLabel = backendOffline
+    ? 'Backend offline'
+    : recognitionPaused
+      ? 'Recognition paused'
+      : socketStatus === 'open'
+        ? 'Live'
+        : socketStatus === 'connecting'
+          ? 'Connecting…'
+          : running ? 'Camera on' : 'Camera off';
 
   return (
     <div className="container-app py-10">
@@ -334,11 +354,16 @@ export default function LiveRecognition() {
           running ? (
             <Button variant="dangerGhost" onClick={stopSession}><Square className="h-4 w-4" />Stop camera</Button>
           ) : (
-            <Button onClick={startSession} loading={starting}><Camera className="h-4 w-4" />Start camera</Button>
+            <Button onClick={startSession} loading={starting} disabled={backendOffline}><Camera className="h-4 w-4" />Start camera</Button>
           )
         }
       />
 
+      {backendOffline && (
+        <div className="mb-5">
+          <Notice tone="red">Server is currently unavailable. Please try again later.</Notice>
+        </div>
+      )}
       {modelError && <div className="mb-5"><Notice tone="red">{modelError}</Notice></div>}
       {cameraError && <div className="mb-5"><Notice tone="red">{cameraError}</Notice></div>}
       {landmarkError && <div className="mb-5"><Notice tone="amber">{landmarkError}</Notice></div>}
@@ -367,7 +392,7 @@ export default function LiveRecognition() {
 
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 p-4">
             <Button variant="outline" size="sm" onClick={togglePause} disabled={!running}><Pause className="h-4 w-4" />{recognitionPaused ? 'Resume' : 'Pause'}</Button>
-            <Button variant="outline" size="sm" onClick={captureGesture} loading={capturing} disabled={!running}><ScanLine className="h-4 w-4" />Capture gesture</Button>
+            <Button variant="outline" size="sm" onClick={captureGesture} loading={capturing} disabled={!running || backendOffline}><ScanLine className="h-4 w-4" />Capture gesture</Button>
             <Button variant="secondary" size="sm" onClick={addCurrentToSentence} disabled={!prediction?.sign}><Hand className="h-4 w-4" />Add to sentence</Button>
             <span className="ml-auto text-xs font-medium text-muted">{buffered} landmark frames buffered</span>
           </div>
@@ -428,7 +453,7 @@ export default function LiveRecognition() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button onClick={saveToHistory} loading={saving} disabled={!prediction?.prediction_id || saved}><Save className="h-4 w-4" />{saved ? 'Saved' : 'Save to history'}</Button>
+            <Button onClick={saveToHistory} loading={saving} disabled={!prediction?.prediction_id || saved || backendOffline}><Save className="h-4 w-4" />{saved ? 'Saved' : 'Save to history'}</Button>
             {prediction?.model_version && <span className="text-xs text-slate-400">Model {prediction.model_version}</span>}
           </div>
         </section>

@@ -5,6 +5,7 @@ import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import { EmptyState, ErrorState, LoadingState, Notice } from '../components/ui/States';
 import { dictionaryApi, datasetApi, resolveMediaUrl } from '../services/api';
+import useConnectionStatus from '../hooks/useConnectionStatus';
 import useDebounce from '../hooks/useDebounce';
 import { asArray, collectionTotal, errorText, itemId, itemLabel } from '../services/format';
 
@@ -17,6 +18,8 @@ function categoryLabel(value) {
 }
 
 export default function Dictionary() {
+  const connection = useConnectionStatus();
+  const backendOffline = connection.status === 'offline';
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [letter, setLetter] = useState('All');
@@ -118,6 +121,11 @@ export default function Dictionary() {
         </div>
       </div>
 
+      {backendOffline && (
+        <div className="mt-4">
+          <Notice tone="red">Server is currently unavailable. Please try again later.</Notice>
+        </div>
+      )}
       {notice && <div className="mt-4"><Notice tone="amber">{notice}</Notice></div>}
 
       <div className="mt-6">
@@ -179,7 +187,7 @@ export default function Dictionary() {
                 <div className="flex justify-between gap-4"><dt className="text-muted">Source</dt><dd className="font-semibold text-navy">{selected.language || 'dataset'}</dd></div>
               </dl>
               <div className="mt-5 flex flex-wrap gap-2">
-                <Button variant={favourites.has(itemId(selected)) ? 'secondary' : 'outline'} onClick={() => toggleFavourite(selected)}>
+                <Button variant={favourites.has(itemId(selected)) ? 'secondary' : 'outline'} onClick={() => toggleFavourite(selected)} disabled={backendOffline}>
                   <Heart className={`h-4 w-4 ${favourites.has(itemId(selected)) ? 'fill-brand-600 text-brand-600' : ''}`} />
                   {favourites.has(itemId(selected)) ? 'Favourite' : 'Add to favourites'}
                 </Button>

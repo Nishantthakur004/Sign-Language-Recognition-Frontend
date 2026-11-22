@@ -6,6 +6,7 @@ import {
 import PageHeader from '../components/ui/PageHeader';
 import Button from '../components/ui/Button';
 import { Notice } from '../components/ui/States';
+import useConnectionStatus from '../hooks/useConnectionStatus';
 import { recognitionApi } from '../services/api';
 import { speak, speechSupported, stopSpeaking } from '../services/speech';
 import { errorText, formatConfidence } from '../services/format';
@@ -20,6 +21,8 @@ function formatDuration(seconds) {
 }
 
 export default function VideoRecognition() {
+  const connection = useConnectionStatus();
+  const backendOffline = connection.status === 'offline';
   const inputRef = useRef(null);
   const previewUrlRef = useRef('');
   const [file, setFile] = useState(null);
@@ -116,6 +119,11 @@ export default function VideoRecognition() {
         }
       />
 
+      {backendOffline && (
+        <div className="mb-5">
+          <Notice tone="red">Server is currently unavailable. Please try again later.</Notice>
+        </div>
+      )}
       {error && <div className="mb-5"><Notice tone="red">{error}</Notice></div>}
 
       <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
@@ -156,7 +164,7 @@ export default function VideoRecognition() {
               className="sr-only"
               onChange={(event) => chooseFile(event.target.files?.[0])}
             />
-            <Button onClick={recognize} loading={processing} disabled={!file || processing}>
+            <Button onClick={recognize} loading={processing} disabled={!file || processing || backendOffline}>
               <ScanLine className="h-4 w-4" />Recognize video
             </Button>
             {file && (

@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { NavLink, Link, Outlet, useLocation } from 'react-router-dom';
 import { BookOpen, Home, Menu, ScanLine, Upload, X } from 'lucide-react';
 import Logo from '../components/ui/Logo';
+import ConnectionStatus from '../components/ConnectionStatus';
+import BackendStatusBanner from '../components/BackendStatusBanner';
+import { startConnectionMonitor } from '../services/connection';
 
 const navigation = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -20,6 +23,8 @@ export default function AppLayout() {
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
+  useEffect(() => startConnectionMonitor(), []);
+
   return (
     <div className="min-h-screen bg-white">
       <a href="#main-content" className="fixed left-4 top-3 z-[120] -translate-y-20 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white transition focus:translate-y-0">Skip to content</a>
@@ -31,9 +36,12 @@ export default function AppLayout() {
               <NavLink key={item.to} to={item.to} end={item.end} className={navClass}>{item.label}</NavLink>
             ))}
           </nav>
-          <button className="grid h-11 w-11 place-items-center rounded-xl text-navy hover:bg-slate-100 lg:hidden" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-controls="mobile-menu" aria-label={menuOpen ? 'Close menu' : 'Open menu'}>
-            {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <ConnectionStatus compact />
+            <button className="grid h-11 w-11 place-items-center rounded-xl text-navy hover:bg-slate-100 lg:hidden" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-controls="mobile-menu" aria-label={menuOpen ? 'Close menu' : 'Open menu'}>
+              {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          </div>
         </div>
         {menuOpen && (
           <div id="mobile-menu" className="border-t border-slate-100 bg-white px-4 py-4 shadow-soft lg:hidden">
@@ -45,6 +53,8 @@ export default function AppLayout() {
           </div>
         )}
       </header>
+
+      <BackendStatusBanner />
 
       <main id="main-content" className="min-h-[calc(100vh-72px)] pb-24 lg:pb-0">
         <Outlet />
