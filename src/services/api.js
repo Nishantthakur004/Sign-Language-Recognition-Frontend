@@ -1,4 +1,8 @@
-export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+const configuredApiUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const DEPLOYED_API_URL = 'https://sign-language-recognition-k83h.onrender.com';
+
+export const API_URL = configuredApiUrl || (isLocalHost ? '' : DEPLOYED_API_URL);
 
 export class ApiError extends Error {
   constructor(message, status, payload) {
