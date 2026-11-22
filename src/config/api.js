@@ -47,7 +47,10 @@ export function buildApiUrl(path = '') {
 
 export function buildWebSocketUrl(token) {
   const url = new URL(API_CONFIG.wsUrl, window.location.href);
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Only upgrade http(s) URLs; a wss:// URL must stay secure or the browser
+  // blocks it as mixed content on an HTTPS page.
+  if (url.protocol === 'https:') url.protocol = 'wss:';
+  else if (url.protocol === 'http:') url.protocol = 'ws:';
   if (token) url.searchParams.set('token', token);
   return url.toString();
 }
